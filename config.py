@@ -11,7 +11,7 @@ SERVICE_PORTS = {
     "RDP": "3389",
     "HTTP": "80",
     "HTTPS": "443",
-    "SMB": "445",  # Đã thêm cổng SMB
+    "SMB": "445",
     "SMTP": "25",
     "POP3": "110",
     "IMAP": "143",

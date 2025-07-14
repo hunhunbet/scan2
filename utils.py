@@ -2,6 +2,7 @@ import os
 import platform
 import subprocess
 import re
+import sys
 
 def find_exe_in_dir(directory, name=""):
     for root, dirs, files in os.walk(directory):
@@ -47,7 +48,7 @@ def validate_ports(port_str):
 def check_impacket_installed():
     try:
         result = subprocess.run(
-            ["python", "-m", "impacket", "--version"],
+            [sys.executable, "-c", "import impacket; print(impacket.__version__)"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             creationflags=get_creation_flags(),

