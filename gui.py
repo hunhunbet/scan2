@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
     QAbstractItemView, QHeaderView, QAction, QMenu, QStatusBar, QInputDialog, QDialog, 
     QDialogButtonBox
 )
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QSettings, QSize
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QSettings, QSize, QMutex, QMutexLocker
 from PyQt5.QtGui import QIcon, QFont, QPalette, QColor
 
 from main_window import DashboardTab
@@ -42,6 +42,7 @@ class NetworkScannerGUI(QMainWindow):
         self.scan_thread = None
         self.brute_thread = None
         self.error_handler = ErrorHandler(self.log)
+        self.log_mutex = QMutex()
         self.settings = QSettings("NetworkScanner", "Config")
         self.init_ui()
         self.scan_update_signal.connect(self.update_result_list)
@@ -525,6 +526,8 @@ class NetworkScannerGUI(QMainWindow):
         if not selected_items:
             self.log("Warning", "Please select at least one target from the list")
             return
+
+        selected_items = sorted(selected_items, key=lambda i: i.data(Qt.UserRole)[2])
         
         tool = self.brute_tool_combo.currentText()
         brute_speed = self.brute_speed_combo.currentText()
@@ -1028,20 +1031,21 @@ class NetworkScannerGUI(QMainWindow):
 
     def log(self, source, message):
         try:
-            timestamp = time.strftime("%H:%M:%S")
-            row_position = self.log_area.rowCount()
-            self.log_area.insertRow(row_position)
-            self.log_area.setItem(row_position, 0, QTableWidgetItem(timestamp))
-            self.log_area.setItem(row_position, 1, QTableWidgetItem(source))
-            self.log_area.setItem(row_position, 2, QTableWidgetItem(message))
-            self.log_area.scrollToBottom()
-            if "success" in message.lower() or "error" in message.lower() or "warning" in message.lower():
-                ip = "System"
-                if "://" in message:
-                    parts = message.split("://")
-                    if len(parts) > 1:
-                        ip = parts[1].split('/')[0].split(':')[0]
-                self.dashboard_tab.add_activity(ip, "N/A", message)
+            with QMutexLocker(self.log_mutex):
+                timestamp = time.strftime("%H:%M:%S")
+                row_position = self.log_area.rowCount()
+                self.log_area.insertRow(row_position)
+                self.log_area.setItem(row_position, 0, QTableWidgetItem(timestamp))
+                self.log_area.setItem(row_position, 1, QTableWidgetItem(source))
+                self.log_area.setItem(row_position, 2, QTableWidgetItem(message))
+                self.log_area.scrollToBottom()
+                if "success" in message.lower() or "error" in message.lower() or "warning" in message.lower():
+                    ip = "System"
+                    if "://" in message:
+                        parts = message.split("://")
+                        if len(parts) > 1:
+                            ip = parts[1].split('/')[0].split(':')[0]
+                    self.dashboard_tab.add_activity(ip, "N/A", message)
         except Exception as e:
             print(f"Logging error: {str(e)}")
 

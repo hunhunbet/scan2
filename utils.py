@@ -2,6 +2,7 @@ import os
 import platform
 import subprocess
 import re
+import base64
 
 def find_exe_in_dir(directory, name=""):
     for root, dirs, files in os.walk(directory):
@@ -56,3 +57,15 @@ def check_impacket_installed():
         return result.returncode == 0
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
         return False
+
+def encrypt_text(text: str) -> str:
+    try:
+        return base64.b64encode(text.encode("utf-8")).decode("utf-8")
+    except Exception:
+        return text
+
+def decrypt_text(text: str) -> str:
+    try:
+        return base64.b64decode(text.encode("utf-8")).decode("utf-8")
+    except Exception:
+        return text
