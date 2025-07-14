@@ -1,6 +1,10 @@
 import traceback
-from PyQt5.QtWidgets import QMessageBox
 import subprocess
+
+try:
+    from PyQt5.QtWidgets import QMessageBox
+except Exception:
+    QMessageBox = None
 
 class ErrorHandler:
     def __init__(self, log_function):
@@ -46,7 +50,10 @@ class ErrorHandler:
             print(f"Error handling failed: {str(e)}")
     
     def show_warning(self, title, message):
-        try:
-            QMessageBox.warning(None, title, message)
-        except:
-            pass
+        if QMessageBox is not None:
+            try:
+                QMessageBox.warning(None, title, message)
+            except Exception:
+                print(f"{title}: {message}")
+        else:
+            print(f"{title}: {message}")
