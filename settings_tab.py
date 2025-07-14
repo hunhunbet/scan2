@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QGridLayout, QLabel, QLineEdit, 
-    QPushButton, QGroupBox
+    QPushButton, QGroupBox, QFileDialog
 )
 from PyQt5.QtCore import QSettings
 from utils import encrypt_text, decrypt_text

@@ -4,6 +4,7 @@ import threading
 import time
 import csv
 import re
+import random
 from datetime import datetime
 from PyQt5.QtWidgets import (
     QMainWindow, QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
@@ -23,6 +24,10 @@ from config import SERVICE_PORTS, WORDLISTS_DIR
 from error_handler import ErrorHandler
 from utils import find_exe_in_dir, get_creation_flags, is_valid_ip, validate_ports, check_impacket_installed
 from brute_file_tab import BruteForceFileTab
+from password_predictor import PasswordPredictor
+from mfa_bypass import MFABypass
+from plugin_system import PluginManager
+from session_manager import SessionManager
 
 class NetworkScannerGUI(QMainWindow):
     scan_update_signal = pyqtSignal(list)
@@ -63,6 +68,10 @@ class NetworkScannerGUI(QMainWindow):
 
         self.brute_file_tab = BruteForceFileTab(self)
         self.tab_widget.addTab(self.brute_file_tab, "Brute from File")
+        
+        # Thêm tab quản lý session
+        self.session_tab = SessionManager(self)
+        self.tab_widget.addTab(self.session_tab, "Sessions")
 
         from settings_tab import SettingsTab
         self.settings_tab = SettingsTab()
@@ -71,6 +80,10 @@ class NetworkScannerGUI(QMainWindow):
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
         self.create_menu()
+        
+        # Tải hệ thống plugin
+        self.plugin_manager = PluginManager(self)
+        self.plugin_manager.load_plugins()
 
     def create_menu(self):
         menu_bar = self.menuBar()
@@ -623,7 +636,24 @@ class NetworkScannerGUI(QMainWindow):
         if not user_file or not pass_file:
             return None
             
-        cmd.extend(["-L", user_file, "-P", pass_file])
+        # Sử dụng password predictor
+        predictor = PasswordPredictor()
+        industry = self.get_target_industry(ip)
+        country = self.get_target_country(ip)
+        
+        # Tạo wordlist động
+        base_wordlist = predictor.predict_wordlist(industry, country)
+        if not base_wordlist or not os.path.isfile(base_wordlist):
+            self.log("Warning", f"Predicted wordlist not found: {base_wordlist}, using default")
+            base_wordlist = os.path.join(WORDLISTS_DIR, "common_passwords.txt")
+        
+        dynamic_wordlist = predictor.generate_dynamic_wordlist(
+            base_wordlist, 
+            industry, 
+            country
+        )
+        
+        cmd.extend(["-L", user_file, "-P", dynamic_wordlist])
         
         if service == "SSH":
             cmd.append(f"ssh://{ip}")
@@ -746,6 +776,14 @@ class NetworkScannerGUI(QMainWindow):
         
         return cmd
 
+    def get_target_industry(self, ip):
+        # TODO: Triển khai thực tế, hiện trả về giá trị mặc định
+        return "technology"
+
+    def get_target_country(self, ip):
+        # TODO: Triển khai thực tế, hiện trả về giá trị mặc định
+        return "us"
+
     def get_wordlists(self, service):
         settings = QSettings("NetworkScanner", "Config")
         user_file = settings.value(f"{service}_users", "")
@@ -785,63 +823,6 @@ class NetworkScannerGUI(QMainWindow):
             "Text Files (*.txt);;All Files (*)"
         )
         return hash_file
-
-    def brute_force_from_file_with_config(self):
-        # Create dialog for brute-force configuration
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Brute-force Configuration")
-        layout = QVBoxLayout(dialog)
-        
-        # Tool Selection
-        tool_layout = QHBoxLayout()
-        tool_layout.addWidget(QLabel("Brute Tool:"))
-        tool_combo = QComboBox()
-        tool_combo.addItems(["Hydra", "Ncrack", "Impacket"])
-        tool_layout.addWidget(tool_combo)
-        layout.addLayout(tool_layout)
-        
-        # Speed Selection
-        speed_layout = QHBoxLayout()
-        speed_layout.addWidget(QLabel("Brute Speed:"))
-        speed_combo = QComboBox()
-        speed_combo.addItems(["Slow (Stealth)", "Normal", "Fast", "Aggressive"])
-        speed_layout.addWidget(speed_combo)
-        layout.addLayout(speed_layout)
-        
-        # PtH Option
-        pth_checkbox = QCheckBox("Use Pass-the-Hash (PtH) / Pass-the-Ticket (PtT)")
-        layout.addWidget(pth_checkbox)
-        
-        # Hash format (only visible for Impacket with PtH)
-        hash_layout = QHBoxLayout()
-        hash_layout.addWidget(QLabel("Hash Format:"))
-        hash_combo = QComboBox()
-        hash_combo.addItems(["LM:NT", "NT", "Kerberos"])
-        hash_layout.addWidget(hash_combo)
-        layout.addLayout(hash_layout)
-        hash_layout.setVisible(False)
-        
-        # Connect event: show hash format when PtH and Impacket are selected
-        def update_hash_visibility():
-            hash_visible = pth_checkbox.isChecked() and tool_combo.currentText() == "Impacket"
-            hash_layout.setVisible(hash_visible)
-        
-        pth_checkbox.stateChanged.connect(update_hash_visibility)
-        tool_combo.currentIndexChanged.connect(update_hash_visibility)
-        
-        # OK and Cancel buttons
-        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        button_box.accepted.connect(dialog.accept)
-        button_box.rejected.connect(dialog.reject)
-        layout.addWidget(button_box)
-        
-        # Show dialog
-        if dialog.exec_() == QDialog.Accepted:
-            tool = tool_combo.currentText()
-            speed = speed_combo.currentText()
-            use_pth = pth_checkbox.isChecked()
-            hash_format = hash_combo.currentText() if use_pth and tool == "Impacket" else ""
-            self.brute_force_from_file(tool, speed, use_pth, hash_format)
 
     def brute_force_from_file(self, tool="Hydra", speed="Normal", use_pth=False, hash_format="", file_path=None):
         if not file_path:
