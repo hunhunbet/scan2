@@ -169,7 +169,7 @@ class NetworkScanner:
             except Exception as e:
                 self.log("Warning", f"Failed to detect network adapter: {str(e)}. Using default adapter.")
         
-        cmd.extend([target, "-p", port, "--open"])
+        cmd.extend(["-oL", "-", "-p", port, "--open", target])
         
         # Adjust scan speed
         if scan_speed == "Slow (Stealth)":
@@ -215,8 +215,11 @@ class NetworkScanner:
         
         elif scan_tool == "Masscan":
             for line in output.splitlines():
-                # Masscan output: Discovered open port 80/tcp on 192.168.1.1
-                m = re.search(r"Discovered open port (\d+)/tcp on (\d+\.\d+\.\d+\.\d+)", line)
+                # masscan list output: open tcp 80 192.168.1.1 1598272072
+                m = re.search(r"open\s+tcp\s+(\d+)\s+(\d+\.\d+\.\d+\.\d+)", line)
+                if not m:
+                    # fallback for default text output
+                    m = re.search(r"Discovered open port (\d+)/tcp on (\d+\.\d+\.\d+\.\d+)", line)
                 if m:
                     port_found = m.group(1)
                     ip = m.group(2)
