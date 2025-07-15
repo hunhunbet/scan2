@@ -15,3 +15,4 @@ python cli.py 192.168.1.0/24 -p 22,80 -t Nmap
 ```
 
 The script attempts to locate `nmap` or `masscan` in your `PATH`. If the required scanner is not found, an error message is displayed.
+When using Masscan the tool now emits list output via `-oL -` for easier parsing.
