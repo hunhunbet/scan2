@@ -197,12 +197,12 @@ class NetworkScanner:
                 lines = block.splitlines()
                 if not lines:
                     continue
-                    
+
                 ip_line = lines[0].strip()
-                ip_match = re.search(r"(\d+\.\d+\.\d+\.\d+)", ip_line)
+                ip_match = re.search(r"((?:\d{1,3}\.){3}\d{1,3}|[a-fA-F0-9:]+)", ip_line)
                 if not ip_match:
                     continue
-                    
+
                 ip = ip_match.group(1)
                 for line in lines:
                     # Find open ports and detect service
@@ -215,15 +215,23 @@ class NetworkScanner:
         
         elif scan_tool == "Masscan":
             for line in output.splitlines():
+4v8f7x-codex/check-and-update-nmap-and-masscan-code
+                # Typical formats:
+                # Discovered open port 80/tcp on 192.168.1.1
+                # open tcp 80 192.168.1.1 1623412342
+                m = re.search(r"Discovered open port (\d+)/tcp on ([\d.:a-fA-F]+)", line)
+                if not m:
+                    m = re.search(r"open tcp (\d+) ([\d.:a-fA-F]+)", line)
+=======
                 # masscan list output: open tcp 80 192.168.1.1 1598272072
                 m = re.search(r"open\s+tcp\s+(\d+)\s+(\d+\.\d+\.\d+\.\d+)", line)
                 if not m:
                     # fallback for default text output
                     m = re.search(r"Discovered open port (\d+)/tcp on (\d+\.\d+\.\d+\.\d+)", line)
+ main
                 if m:
                     port_found = m.group(1)
                     ip = m.group(2)
-                    # Masscan doesn't detect service, so we use port-based service name
                     service = self.get_service_from_port(port_found)
                     results.append((ip, port_found, service))
                     service_counts[service] = service_counts.get(service, 0) + 1
