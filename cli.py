@@ -26,24 +26,33 @@ def find_nmap():
 
 
 def find_masscan():
+    base_dir = os.path.dirname(os.path.abspath(__file__))
     if os.name == "nt":
+        exe_name = "masscan.exe"
         candidates = [
+            os.path.join(base_dir, "masscan", exe_name),
             "C:\\Program Files\\Masscan\\masscan.exe",
             "C:\\Program Files (x86)\\Masscan\\masscan.exe",
             "C:\\masscan\\masscan.exe",
         ]
-        exe_name = "masscan.exe"
     else:
-        candidates = ["/usr/bin/masscan", "/usr/local/bin/masscan"]
         exe_name = "masscan"
+        candidates = [
+            os.path.join(base_dir, "masscan", exe_name),
+            os.path.join(base_dir, "masscan", "masscan.exe"),
+            "/usr/bin/masscan",
+            "/usr/local/bin/masscan",
+        ]
 
     for path in os.environ.get("PATH", "").split(os.pathsep):
         full_path = os.path.join(path, exe_name)
         if os.path.isfile(full_path):
             return full_path
+
     for path in candidates:
         if os.path.isfile(path):
             return path
+
     return None
 
 
