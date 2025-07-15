@@ -1,9 +1,15 @@
-import argparse
+
 import os
-import shutil
 import sys
 
-from PyQt5.QtWidgets import QApplication
+try:
+    from PyQt5.QtWidgets import QApplication
+except Exception as e:  # noqa: PIE786
+    print("PyQt5 is required to launch the GUI: {}".format(e))
+    sys.exit(1)
+
+from gui import NetworkScannerGUI
+
 
 from gui import NetworkScannerGUI
 from network_scanner import NetworkScanner
@@ -31,14 +37,12 @@ def run_cli() -> None:
 
 
 if __name__ == "__main__":
-    if "--cli" in sys.argv:
-        sys.argv.remove("--cli")
-        run_cli()
-    else:
-        if os.name != "nt" and not os.environ.get("DISPLAY"):
-            print("Error: GUI requires a display. Use --cli for command-line mode.")
-            sys.exit(1)
-        app = QApplication(sys.argv)
-        window = NetworkScannerGUI()
-        window.show()
-        sys.exit(app.exec_())
+    if not os.environ.get("DISPLAY") and sys.platform != "win32":
+        print("Error: No DISPLAY environment variable; GUI cannot start.")
+        sys.exit(1)
+
+    app = QApplication(sys.argv)
+    window = NetworkScannerGUI()
+    window.show()
+    sys.exit(app.exec_())
+
