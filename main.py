@@ -36,13 +36,18 @@ def run_cli() -> None:
         print(r)
 
 
-if __name__ == "__main__":
-    if not os.environ.get("DISPLAY") and sys.platform != "win32":
-        print("Error: No DISPLAY environment variable; GUI cannot start.")
-        sys.exit(1)
 
-    app = QApplication(sys.argv)
-    window = NetworkScannerGUI()
-    window.show()
-    sys.exit(app.exec_())
+
+    if "--cli" in sys.argv:
+        sys.argv.remove("--cli")
+        run_cli()
+    else:
+        if os.name != "nt" and not os.environ.get("DISPLAY"):
+            print("Error: GUI requires a display. Use --cli for command-line mode.")
+            sys.exit(1)
+        app = QApplication(sys.argv)
+        window = NetworkScannerGUI()
+        window.show()
+
+     
 

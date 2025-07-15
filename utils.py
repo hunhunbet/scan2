@@ -2,7 +2,6 @@ import os
 import platform
 import subprocess
 import re
-import sys
 
 def find_exe_in_dir(directory, name=""):
     for root, dirs, files in os.walk(directory):
@@ -60,6 +59,7 @@ def check_impacket_installed():
 
 
 
+
 def get_default_interface():
     """Return the default network interface on Linux/Unix systems."""
     if platform.system() == "Windows":
@@ -100,3 +100,4 @@ def get_default_interface():
     except Exception:
         pass
     return None
+

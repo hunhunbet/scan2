@@ -3,6 +3,7 @@ from PyQt5.QtWidgets import (
     QPushButton, QGroupBox, QFileDialog
 )
 from PyQt5.QtCore import QSettings
+from utils import encrypt_text, decrypt_text
 import os
 
 class SettingsTab(QWidget):
@@ -113,25 +114,25 @@ class SettingsTab(QWidget):
             edit_widget.setText(path)
 
     def load_settings(self):
-        self.nmap_path_edit.setText(self.settings.value("nmap_path", ""))
-        self.hydra_path_edit.setText(self.settings.value("hydra_path", ""))
-        self.ncrack_path_edit.setText(self.settings.value("ncrack_path", ""))
-        self.masscan_path_edit.setText(self.settings.value("masscan_path", ""))
-        self.impacket_path_edit.setText(self.settings.value("impacket_path", ""))
-        self.python_path_edit.setText(self.settings.value("python_path", "python"))
+        self.nmap_path_edit.setText(decrypt_text(self.settings.value("nmap_path", "")))
+        self.hydra_path_edit.setText(decrypt_text(self.settings.value("hydra_path", "")))
+        self.ncrack_path_edit.setText(decrypt_text(self.settings.value("ncrack_path", "")))
+        self.masscan_path_edit.setText(decrypt_text(self.settings.value("masscan_path", "")))
+        self.impacket_path_edit.setText(decrypt_text(self.settings.value("impacket_path", "")))
+        self.python_path_edit.setText(decrypt_text(self.settings.value("python_path", "python")))
         
         for service, (user_edit, pass_edit) in self.wordlist_edits.items():
-            user_edit.setText(self.settings.value(f"{service}_users", ""))
-            pass_edit.setText(self.settings.value(f"{service}_passwords", ""))
+            user_edit.setText(decrypt_text(self.settings.value(f"{service}_users", "")))
+            pass_edit.setText(decrypt_text(self.settings.value(f"{service}_passwords", "")))
 
     def save_settings(self):
-        self.settings.setValue("nmap_path", self.nmap_path_edit.text())
-        self.settings.setValue("hydra_path", self.hydra_path_edit.text())
-        self.settings.setValue("ncrack_path", self.ncrack_path_edit.text())
-        self.settings.setValue("masscan_path", self.masscan_path_edit.text())
-        self.settings.setValue("impacket_path", self.impacket_path_edit.text())
-        self.settings.setValue("python_path", self.python_path_edit.text())
+        self.settings.setValue("nmap_path", encrypt_text(self.nmap_path_edit.text()))
+        self.settings.setValue("hydra_path", encrypt_text(self.hydra_path_edit.text()))
+        self.settings.setValue("ncrack_path", encrypt_text(self.ncrack_path_edit.text()))
+        self.settings.setValue("masscan_path", encrypt_text(self.masscan_path_edit.text()))
+        self.settings.setValue("impacket_path", encrypt_text(self.impacket_path_edit.text()))
+        self.settings.setValue("python_path", encrypt_text(self.python_path_edit.text()))
         
         for service, (user_edit, pass_edit) in self.wordlist_edits.items():
-            self.settings.setValue(f"{service}_users", user_edit.text())
-            self.settings.setValue(f"{service}_passwords", pass_edit.text())
+            self.settings.setValue(f"{service}_users", encrypt_text(user_edit.text()))
+            self.settings.setValue(f"{service}_passwords", encrypt_text(pass_edit.text()))

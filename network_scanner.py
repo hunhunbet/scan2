@@ -4,6 +4,8 @@ import subprocess
 import re
 import time
 import sys
+import json
+import xml.etree.ElementTree as ET
 from progress_manager import ProgressManager
 from error_handler import ErrorHandler
 from utils import (
@@ -13,24 +15,47 @@ from utils import (
     get_default_interface,
 )
 
+RESUME_FILE = os.path.join(os.path.dirname(__file__), "results", "resume.json")
+MAX_TARGETS = 1024
+
 class NetworkScanner:
     def __init__(self, nmap_path, masscan_path, log_function):
         self.nmap_path = nmap_path
         self.masscan_path = masscan_path
         self.log = log_function
         self.error_handler = ErrorHandler(log_function)
+
+    def load_resume_data(self):
+        if not os.path.isfile(RESUME_FILE):
+            return []
+        try:
+            with open(RESUME_FILE, "r") as f:
+                data = json.load(f)
+            return data.get("completed_targets", [])
+        except Exception:
+            return []
+
+    def save_resume_data(self, completed_targets):
+        try:
+            os.makedirs(os.path.dirname(RESUME_FILE), exist_ok=True)
+            with open(RESUME_FILE, "w") as f:
+                json.dump({"completed_targets": completed_targets}, f)
+        except Exception as e:
+            self.log("Error", f"Failed to save resume data: {str(e)}")
     
-    def scan_network(self, target, port, scan_tool="Nmap", scan_speed="Normal"):
+    def scan_network(self, target, port, scan_tool="Nmap", scan_speed="Normal", resume=False):
         try:
             # Parse target specification
             targets = self.parse_targets(target)
             if not targets:
                 self.log("Warning", "No valid targets to scan")
                 return []
-            
+
+            completed = self.load_resume_data() if resume else []
+            targets = [t for t in targets if t not in completed]
             total_targets = len(targets)
             progress = ProgressManager(total_targets)
-            
+
             scan_results = []
             for target_spec in targets:
                 # Handle CIDR ranges
@@ -38,7 +63,12 @@ class NetworkScanner:
                     scan_results += self.scan_cidr(target_spec, port, scan_tool, scan_speed, progress)
                 else:
                     scan_results += self.scan_single(target_spec, port, scan_tool, scan_speed, progress)
-            
+                completed.append(target_spec)
+                if resume:
+                    self.save_resume_data(completed)
+
+            if resume and os.path.isfile(RESUME_FILE):
+                os.remove(RESUME_FILE)
             return scan_results
         except Exception as e:
             self.error_handler.handle(e, "Network scanning")
@@ -65,6 +95,9 @@ class NetworkScanner:
                 self.log("Warning", f"Invalid target format skipped: {t}")
         if not targets:
             self.log("Error", "No valid targets found after parsing input.")
+        if len(targets) > MAX_TARGETS:
+            self.log("Warning", f"Target list truncated to {MAX_TARGETS} items")
+            targets = targets[:MAX_TARGETS]
         return targets
     
     def scan_cidr(self, cidr, port, scan_tool, scan_speed, progress):
@@ -132,7 +165,7 @@ class NetworkScanner:
             return []
     
     def build_nmap_command(self, target, port, scan_speed):
-        cmd = [self.nmap_path, "-n", "-p", port, "--open"]
+        cmd = [self.nmap_path, "-n", "-p", port, "--open", "-oX", "-"]
         
         # Adjust scan speed
         if scan_speed == "Slow (Stealth)":
@@ -179,7 +212,10 @@ class NetworkScanner:
             if interface:
                 cmd.extend(["-e", interface])
         
-        cmd.extend(["-oL", "-", "-p", port, "--open", target])
+
+        cmd.extend([target, "-p", port, "--open", "-oJ", "-"])
+
+
         
         # Adjust scan speed
         if scan_speed == "Slow (Stealth)":
@@ -202,6 +238,8 @@ class NetworkScanner:
         service_counts = {}
         
         if scan_tool == "Nmap":
+            if output.strip().startswith("<"):
+                return self.parse_nmap_xml_output(output, target, progress)
             blocks = re.split(r"Nmap scan report for ", output)
             for block in blocks[1:]:
                 lines = block.splitlines()
@@ -224,21 +262,18 @@ class NetworkScanner:
                         service_counts[detected_service] = service_counts.get(detected_service, 0) + 1
         
         elif scan_tool == "Masscan":
+            if output.strip().startswith("["):
+                return self.parse_masscan_json_output(output, target, progress)
             for line in output.splitlines():
-4v8f7x-codex/check-and-update-nmap-and-masscan-code
+                m = re.search(r"Discovered open port (\d+)/tcp on (\d+\.\d+\.\d+\.\d+)", line)
+
                 # Typical formats:
                 # Discovered open port 80/tcp on 192.168.1.1
                 # open tcp 80 192.168.1.1 1623412342
                 m = re.search(r"Discovered open port (\d+)/tcp on ([\d.:a-fA-F]+)", line)
                 if not m:
                     m = re.search(r"open tcp (\d+) ([\d.:a-fA-F]+)", line)
-=======
-                # masscan list output: open tcp 80 192.168.1.1 1598272072
-                m = re.search(r"open\s+tcp\s+(\d+)\s+(\d+\.\d+\.\d+\.\d+)", line)
-                if not m:
-                    # fallback for default text output
-                    m = re.search(r"Discovered open port (\d+)/tcp on (\d+\.\d+\.\d+\.\d+)", line)
- main
+
                 if m:
                     port_found = m.group(1)
                     ip = m.group(2)
@@ -249,7 +284,46 @@ class NetworkScanner:
         # Update progress
         progress.target_completed(target, len(results), service_counts)
         self.log("Info", f"{target}: Found {len(results)} open services {service_counts}")
-        
+
+        return results
+
+    def parse_nmap_xml_output(self, xml_output, target, progress):
+        results = []
+        service_counts = {}
+        try:
+            root = ET.fromstring(xml_output)
+            for host in root.findall("host"):
+                addr = host.find("address").get("addr")
+                for port in host.findall("ports/port"):
+                    state = port.find("state").get("state")
+                    if state != "open":
+                        continue
+                    portid = port.get("portid")
+                    service_elem = port.find("service")
+                    service = service_elem.get("name") if service_elem is not None else self.get_service_from_port(portid)
+                    results.append((addr, portid, service))
+                    service_counts[service] = service_counts.get(service, 0) + 1
+        except Exception as e:
+            self.log("Error", f"XML parse error: {str(e)}")
+        progress.target_completed(target, len(results), service_counts)
+        self.log("Info", f"{target}: Found {len(results)} open services {service_counts}")
+        return results
+
+    def parse_masscan_json_output(self, json_output, target, progress):
+        results = []
+        service_counts = {}
+        try:
+            data = json.loads(json_output)
+            for entry in data:
+                ip = entry.get("ip")
+                portid = str(entry.get("port"))
+                service = self.get_service_from_port(portid)
+                results.append((ip, portid, service))
+                service_counts[service] = service_counts.get(service, 0) + 1
+        except Exception as e:
+            self.log("Error", f"JSON parse error: {str(e)}")
+        progress.target_completed(target, len(results), service_counts)
+        self.log("Info", f"{target}: Found {len(results)} open services {service_counts}")
         return results
     
     def get_service_from_port(self, port):
