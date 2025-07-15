@@ -1,9 +1,15 @@
-import argparse
+
 import os
-import shutil
 import sys
 
-from PyQt5.QtWidgets import QApplication
+try:
+    from PyQt5.QtWidgets import QApplication
+except Exception as e:  # noqa: PIE786
+    print("PyQt5 is required to launch the GUI: {}".format(e))
+    sys.exit(1)
+
+from gui import NetworkScannerGUI
+
 
 from gui import NetworkScannerGUI
 from network_scanner import NetworkScanner
@@ -31,6 +37,7 @@ def run_cli() -> None:
 
 
 
+
     if "--cli" in sys.argv:
         sys.argv.remove("--cli")
         run_cli()
@@ -41,4 +48,6 @@ def run_cli() -> None:
         app = QApplication(sys.argv)
         window = NetworkScannerGUI()
         window.show()
+
+     
 
