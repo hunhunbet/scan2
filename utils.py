@@ -57,14 +57,47 @@ def check_impacket_installed():
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
         return False
 
-def encrypt_text(text: str) -> str:
-    try:
-        return base64.b64encode(text.encode("utf-8")).decode("utf-8")
-    except Exception:
-        return text
 
-def decrypt_text(text: str) -> str:
+
+
+def get_default_interface():
+    """Return the default network interface on Linux/Unix systems."""
+    if platform.system() == "Windows":
+        return None
     try:
-        return base64.b64decode(text.encode("utf-8")).decode("utf-8")
+        result = subprocess.run(
+            ["ip", "route", "show", "default"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            encoding="utf-8",
+            errors="ignore",
+            creationflags=get_creation_flags(),
+            timeout=5,
+        )
+        for line in result.stdout.splitlines():
+            if " dev " in line:
+                parts = line.split()
+                if "dev" in parts:
+                    return parts[parts.index("dev") + 1]
     except Exception:
-        return text
+        pass
+
+    try:
+        result = subprocess.run(
+            ["ip", "-o", "link", "show"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            encoding="utf-8",
+            errors="ignore",
+            creationflags=get_creation_flags(),
+            timeout=5,
+        )
+        for line in result.stdout.splitlines():
+            if ":" in line:
+                iface = line.split(":", 2)[1].strip().split()[0]
+                if iface != "lo":
+                    return iface
+    except Exception:
+        pass
+    return None
+

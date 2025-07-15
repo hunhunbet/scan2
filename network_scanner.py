@@ -8,7 +8,12 @@ import json
 import xml.etree.ElementTree as ET
 from progress_manager import ProgressManager
 from error_handler import ErrorHandler
-from utils import get_creation_flags, is_valid_ip, parse_ip_range
+from utils import (
+    get_creation_flags,
+    is_valid_ip,
+    parse_ip_range,
+    get_default_interface,
+)
 
 RESUME_FILE = os.path.join(os.path.dirname(__file__), "results", "resume.json")
 MAX_TARGETS = 1024
@@ -177,11 +182,10 @@ class NetworkScanner:
     
     def build_masscan_command(self, target, port, scan_speed):
         cmd = [self.masscan_path]
-        
-        # Windows: try to find network adapter
+
+        # Detect network adapter
         if sys.platform == "win32" and os.path.exists(self.masscan_path):
             try:
-                # List available adapters
                 result = subprocess.run(
                     [self.masscan_path, "--list"],
                     stdout=subprocess.PIPE,
@@ -189,9 +193,8 @@ class NetworkScanner:
                     encoding="utf-8",
                     errors="ignore",
                     creationflags=get_creation_flags(),
-                    timeout=5
+                    timeout=5,
                 )
-                # Find first adapter in the list
                 for line in result.stdout.splitlines():
                     if "adapter" in line.lower():
                         parts = line.split()
@@ -200,9 +203,19 @@ class NetworkScanner:
                             cmd.extend(["-e", adapter])
                             break
             except Exception as e:
-                self.log("Warning", f"Failed to detect network adapter: {str(e)}. Using default adapter.")
+                self.log(
+                    "Warning",
+                    f"Failed to detect network adapter: {str(e)}. Using default adapter.",
+                )
+        else:
+            interface = get_default_interface()
+            if interface:
+                cmd.extend(["-e", interface])
         
+
         cmd.extend([target, "-p", port, "--open", "-oJ", "-"])
+
+
         
         # Adjust scan speed
         if scan_speed == "Slow (Stealth)":
@@ -234,7 +247,7 @@ class NetworkScanner:
                     continue
 
                 ip_line = lines[0].strip()
-                ip_match = re.search(r"(\d+\.\d+\.\d+\.\d+)", ip_line)
+                ip_match = re.search(r"((?:\d{1,3}\.){3}\d{1,3}|[a-fA-F0-9:]+)", ip_line)
                 if not ip_match:
                     continue
 
@@ -253,6 +266,14 @@ class NetworkScanner:
                 return self.parse_masscan_json_output(output, target, progress)
             for line in output.splitlines():
                 m = re.search(r"Discovered open port (\d+)/tcp on (\d+\.\d+\.\d+\.\d+)", line)
+
+                # Typical formats:
+                # Discovered open port 80/tcp on 192.168.1.1
+                # open tcp 80 192.168.1.1 1623412342
+                m = re.search(r"Discovered open port (\d+)/tcp on ([\d.:a-fA-F]+)", line)
+                if not m:
+                    m = re.search(r"open tcp (\d+) ([\d.:a-fA-F]+)", line)
+
                 if m:
                     port_found = m.group(1)
                     ip = m.group(2)

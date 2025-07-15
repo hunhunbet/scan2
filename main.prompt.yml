@@ -1,0 +1,6 @@
+messages: []
+model: deepseek/deepseek-v3-0324
+modelParameters:
+  max_tokens: 4096
+testData: []
+evaluators: []

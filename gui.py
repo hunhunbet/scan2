@@ -1051,38 +1051,37 @@ class NetworkScannerGUI(QMainWindow):
         return None
 
     def find_masscan(self):
+        base_dir = os.path.dirname(os.path.abspath(__file__))
         if sys.platform == "win32":
-            # Windows: check common locations
+            exe_name = "masscan.exe"
             common_paths = [
+                os.path.join(base_dir, "masscan", exe_name),
                 "C:\\Program Files\\Masscan\\masscan.exe",
                 "C:\\Program Files (x86)\\Masscan\\masscan.exe",
                 "C:\\masscan\\masscan.exe"
             ]
-            # Check in PATH
             for path in os.environ["PATH"].split(os.pathsep):
-                full_path = os.path.join(path, "masscan.exe")
+                full_path = os.path.join(path, exe_name)
                 if os.path.isfile(full_path):
                     return full_path
-            # Check common paths
-            for path in common_paths:
-                if os.path.isfile(path):
-                    return path
-            return "masscan.exe"  # Fallback
         else:
-            # Linux/macOS
-            masscan_exe = "masscan"
-            for path in os.environ["PATH"].split(os.pathsep):
-                full_path = os.path.join(path, masscan_exe)
-                if os.path.isfile(full_path):
-                    return full_path
+            exe_name = "masscan"
             common_paths = [
+                os.path.join(base_dir, "masscan", exe_name),
+                os.path.join(base_dir, "masscan", "masscan.exe"),
                 "/usr/bin/masscan",
                 "/usr/local/bin/masscan"
             ]
-            for path in common_paths:
-                if os.path.isfile(path):
-                    return path
-            return None
+            for path in os.environ.get("PATH", "").split(os.pathsep):
+                full_path = os.path.join(path, exe_name)
+                if os.path.isfile(full_path):
+                    return full_path
+
+        for path in common_paths:
+            if os.path.isfile(path):
+                return path
+
+        return None
 
     def closeEvent(self, event):
         if self.is_scanning:
