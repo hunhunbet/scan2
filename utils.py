@@ -57,3 +57,45 @@ def check_impacket_installed():
         return result.returncode == 0
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
         return False
+
+
+def get_default_interface():
+    """Return the default network interface on Linux/Unix systems."""
+    if platform.system() == "Windows":
+        return None
+    try:
+        result = subprocess.run(
+            ["ip", "route", "show", "default"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            encoding="utf-8",
+            errors="ignore",
+            creationflags=get_creation_flags(),
+            timeout=5,
+        )
+        for line in result.stdout.splitlines():
+            if " dev " in line:
+                parts = line.split()
+                if "dev" in parts:
+                    return parts[parts.index("dev") + 1]
+    except Exception:
+        pass
+
+    try:
+        result = subprocess.run(
+            ["ip", "-o", "link", "show"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            encoding="utf-8",
+            errors="ignore",
+            creationflags=get_creation_flags(),
+            timeout=5,
+        )
+        for line in result.stdout.splitlines():
+            if ":" in line:
+                iface = line.split(":", 2)[1].strip().split()[0]
+                if iface != "lo":
+                    return iface
+    except Exception:
+        pass
+    return None

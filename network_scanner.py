@@ -6,7 +6,12 @@ import time
 import sys
 from progress_manager import ProgressManager
 from error_handler import ErrorHandler
-from utils import get_creation_flags, is_valid_ip, parse_ip_range
+from utils import (
+    get_creation_flags,
+    is_valid_ip,
+    parse_ip_range,
+    get_default_interface,
+)
 
 class NetworkScanner:
     def __init__(self, nmap_path, masscan_path, log_function):
@@ -144,11 +149,10 @@ class NetworkScanner:
     
     def build_masscan_command(self, target, port, scan_speed):
         cmd = [self.masscan_path]
-        
-        # Windows: try to find network adapter
+
+        # Detect network adapter
         if sys.platform == "win32" and os.path.exists(self.masscan_path):
             try:
-                # List available adapters
                 result = subprocess.run(
                     [self.masscan_path, "--list"],
                     stdout=subprocess.PIPE,
@@ -156,9 +160,8 @@ class NetworkScanner:
                     encoding="utf-8",
                     errors="ignore",
                     creationflags=get_creation_flags(),
-                    timeout=5
+                    timeout=5,
                 )
-                # Find first adapter in the list
                 for line in result.stdout.splitlines():
                     if "adapter" in line.lower():
                         parts = line.split()
@@ -167,7 +170,14 @@ class NetworkScanner:
                             cmd.extend(["-e", adapter])
                             break
             except Exception as e:
-                self.log("Warning", f"Failed to detect network adapter: {str(e)}. Using default adapter.")
+                self.log(
+                    "Warning",
+                    f"Failed to detect network adapter: {str(e)}. Using default adapter.",
+                )
+        else:
+            interface = get_default_interface()
+            if interface:
+                cmd.extend(["-e", interface])
         
         cmd.extend([target, "-p", port, "--open"])
         
