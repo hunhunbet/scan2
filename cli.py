@@ -67,6 +67,7 @@ def main():
         choices=["Slow (Stealth)", "Normal", "Fast", "Aggressive"],
         default="Normal",
     )
+    parser.add_argument("-o", "--output", help="Optional CSV output file")
     args = parser.parse_args()
 
     nmap_path = find_nmap()
@@ -83,6 +84,14 @@ def main():
     for ip, port, service in results:
         print(f"{ip}:{port} {service}")
 
+    if args.output:
+        import csv
+        with open(args.output, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["IP", "Port", "Service"])
+            writer.writerows(results)
+
 
 if __name__ == "__main__":
     main()
+

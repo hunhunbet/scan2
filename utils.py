@@ -57,3 +57,4 @@ def check_impacket_installed():
         return result.returncode == 0
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
         return False
+
