@@ -59,6 +59,7 @@ def check_impacket_installed():
         return False
 
 
+
 def get_default_interface():
     """Return the default network interface on Linux/Unix systems."""
     if platform.system() == "Windows":
