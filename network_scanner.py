@@ -169,7 +169,7 @@ class NetworkScanner:
             except Exception as e:
                 self.log("Warning", f"Failed to detect network adapter: {str(e)}. Using default adapter.")
         
-        cmd.extend([target, "-p", port, "--open"])
+        cmd.extend(["-oL", "-", "-p", port, "--open", target])
         
         # Adjust scan speed
         if scan_speed == "Slow (Stealth)":
@@ -215,12 +215,20 @@ class NetworkScanner:
         
         elif scan_tool == "Masscan":
             for line in output.splitlines():
+4v8f7x-codex/check-and-update-nmap-and-masscan-code
                 # Typical formats:
                 # Discovered open port 80/tcp on 192.168.1.1
                 # open tcp 80 192.168.1.1 1623412342
                 m = re.search(r"Discovered open port (\d+)/tcp on ([\d.:a-fA-F]+)", line)
                 if not m:
                     m = re.search(r"open tcp (\d+) ([\d.:a-fA-F]+)", line)
+=======
+                # masscan list output: open tcp 80 192.168.1.1 1598272072
+                m = re.search(r"open\s+tcp\s+(\d+)\s+(\d+\.\d+\.\d+\.\d+)", line)
+                if not m:
+                    # fallback for default text output
+                    m = re.search(r"Discovered open port (\d+)/tcp on (\d+\.\d+\.\d+\.\d+)", line)
+ main
                 if m:
                     port_found = m.group(1)
                     ip = m.group(2)

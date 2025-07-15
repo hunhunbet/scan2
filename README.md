@@ -21,4 +21,8 @@ python cli.py 192.168.1.0/24 -p 22,80 -t Masscan --output scan.csv
 ```
 
 The script attempts to locate `nmap` or `masscan` in your `PATH`. If the required scanner is not found, an error message is displayed.
+ 4v8f7x-codex/check-and-update-nmap-and-masscan-code
 
+=======
+When using Masscan the tool now emits list output via `-oL -` for easier parsing.
+ main
